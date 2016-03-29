@@ -1,10 +1,11 @@
 declare var describe, it, expect, hot, cold, expectObservable, expectSubscriptions, console;
 require('es6-shim');
 import 'reflect-metadata';
-import {provideStore, Store, Dispatcher, Action} from '../src/store';
+import {Store, Action, combineReducers, REDUCER, INITIAL_STATE} from '../src/index';
+import {provideStore} from '../src/ng2';
 import {Observable} from 'rxjs/Observable';
 import {Injector, provide} from 'angular2/core';
-import 'rxjs/add/operator/combineLatest-static';
+import 'rxjs/add/observable/combineLatest';
 
 import {counterReducer, INCREMENT, DECREMENT, RESET} from './fixtures/counter';
 import {todos, visibilityFilter, VisibilityFilters, SET_VISIBILITY_FILTER, ADD_TODO, COMPLETE_TODO, COMPLETE_ALL_TODOS} from './fixtures/todos';
@@ -26,15 +27,16 @@ describe('ngRx Integration spec', () => {
 
     let injector: Injector;
     let store: Store<TodoAppSchema>;
-    let dispatcher: Dispatcher<Action>;
     let currentState: TodoAppSchema;
 
+    const rootReducer = combineReducers({ todos, visibilityFilter });
+    const initialValue = { todos: [], visibilityFilter: VisibilityFilters.SHOW_ALL };
+
     injector = Injector.resolveAndCreate([
-      provideStore({ todos, visibilityFilter }, { todos: [], visibilityFilter: VisibilityFilters.SHOW_ALL })
+      provideStore(rootReducer, initialValue)
     ]);
 
     store = injector.get(Store);
-    dispatcher = injector.get(Dispatcher);
 
     store.subscribe(state => {
       currentState = state;
@@ -42,6 +44,34 @@ describe('ngRx Integration spec', () => {
 
     it('should successfully instantiate', () => {
       expect(store).toBeDefined();
+    });
+
+    it('should combine reducers automatically if a key/value map is provided', () => {
+      const reducers = { test: function(){} };
+      spyOn(reducers, 'test');
+      const action = { type: 'Test Action' };
+      const reducer = Injector.resolveAndCreate([ provideStore(reducers) ]).get(REDUCER);
+
+      expect(reducer).toBeDefined();
+      expect(typeof reducer === 'function').toBe(true);
+
+      reducer(undefined, action);
+
+      expect(reducers.test).toHaveBeenCalledWith(undefined, action);
+    });
+
+    it('should probe the reducer to resolve the initial state if no initial state is provided', () => {
+      const reducer = () => 2;
+      const initialState = Injector.resolveAndCreate([ provideStore(reducer) ]).get(INITIAL_STATE);
+
+      expect(initialState).toBe(2);
+    });
+
+    it('should use a provided initial state', () => {
+      const reducer = () => 2;
+      const initialState = Injector.resolveAndCreate([ provideStore(reducer, 3) ]).get(INITIAL_STATE);
+
+      expect(initialState).toBe(3);
     });
 
     it('should start with no todos and showing all filter', () => {
